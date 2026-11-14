@@ -1,0 +1,69 @@
+# Producción en el VPS.  Uso:
+#   docker compose -f compose.prod.yml up -d --build
+name: metricas
+
+services:
+  app:
+    build: .
+    image: metricas-app:latest
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DOCKER_URL: http://docker-proxy:2375
+    volumes:
+      # /proc del VPS en solo lectura: así se mide el servidor entero y no solo este contenedor
+      - /proc:/host/proc:ro
+      # Historial y ajustes. Vive en el disco del VPS, por eso también sirve para medir el disco.
+      - datos:/datos
+    read_only: true                   # el contenedor no puede modificar sus propios archivos
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on: [docker-proxy]
+    networks:
+      proxy:
+        aliases: [metricas-app]       # nombre con el que Caddy y el catálogo encuentran el monitor
+      docker: {}
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  # Intermediario del socket de Docker: solo deja listar, ver estadísticas/logs y reiniciar.
+  # Nada de crear contenedores, ejecutar comandos, ni leer archivos de otros contenedores.
+  docker-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      ALLOW_RESTARTS: 1
+      ALLOW_LOGS: 1
+      POST: 0
+      ALLOW_START: 0
+      ALLOW_STOP: 0
+      ALLOW_ARCHIVE: 0
+      ALLOW_EXPORT: 0
+      ALLOW_CHANGES: 0
+      ALLOW_TOP: 0
+      EXEC: 0
+      IMAGES: 0
+      VOLUMES: 0
+      NETWORKS: 0
+      INFO: 0
+      TZ: America/Bogota
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs: [/run]
+    networks: [docker]
+    deploy:
+      resources:
+        limits: { memory: 64m }
+
+networks:
+  proxy:
+    external: true                    # la crea el proxy (Caddy), compartida entre proyectos
+  docker:
+    internal: true                    # red privada monitor <-> docker-proxy, sin salida a internet
+
+volumes:
+  datos: {}

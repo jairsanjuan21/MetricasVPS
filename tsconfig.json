@@ -1,0 +1,19 @@
+{
+  // Servidor: Node ejecuta los .ts directamente ("type stripping"), sin paso de compilación.
+  // Por eso: imports con extensión .ts y solo sintaxis que se pueda borrar (nada de enum ni namespace).
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["server/**/*.ts"]
+}

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+datos/
+*.log
+
+# Variables de entorno: nunca a GitHub
+.env
+.env.*
+!.env.example
+!.env.production.example
