@@ -1356,15 +1356,15 @@ input {
   gap: 8px;
   min-height: 40px;
 }
-.en-vivo-pagina {
+.ev {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 20px 24px 40px;
+  padding: 20px 24px 32px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
-.en-vivo-pagina__cabeza {
+.ev__cabeza {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1373,18 +1373,110 @@ input {
   padding-bottom: 16px;
   border-bottom: 1px solid var(--linea);
 }
-.en-vivo-pagina__titulo {
+.ev__marca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ev__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--azul-fondo);
+  border: 1px solid var(--azul-borde);
+  color: var(--azul);
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 18px;
+}
+.ev__titulo {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
-.en-vivo-pagina__titulo h1 {
+.ev__titulo h1 {
   font-family: var(--display);
   font-size: 20px;
   font-weight: 600;
 }
+.ev__titulo .en-vivo {
+  font-size: 12px;
+  color: var(--tenue);
+}
+.ev__acciones {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ev__salud {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ev__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--texto-2);
+}
+.ev__fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.ev__natalia {
+  flex: 1 1 300px;
+}
+.ev__contadores {
+  flex: 2 1 420px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ev__enviados {
+  color: var(--lila);
+}
+.ev__actividad {
+  padding: 18px 20px;
+  gap: 12px;
+}
+.ev__actividad h2 {
+  font-size: 14px;
+}
+.ev__actividad ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  font-size: 13px;
+}
+.ev__actividad li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ev__actividad time {
+  font-size: 12px;
+}
 @media (max-width: 560px) {
-  .en-vivo-pagina {
-    padding: 16px 12px 32px;
+  .ev {
+    padding: 16px 12px 28px;
   }
+  .ev__contadores {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.tabla th.derecha {
+  text-align: right;
 }

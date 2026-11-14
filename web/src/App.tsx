@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { api, configurarSesionVencida } from "./api.ts";
 import { Login } from "./paginas/Login.tsx";
 import { Dashboard } from "./paginas/Dashboard.tsx";
+import { EnVivo } from "./paginas/EnVivo.tsx";
+
+/** /en-vivo abre solo los usuarios del catálogo (ventana aparte); cualquier otra ruta, el dashboard. */
+const esVentanaEnVivo = location.pathname.startsWith("/en-vivo");
 
 type Estado = { tipo: "cargando" } | { tipo: "fuera"; aviso?: string } | { tipo: "dentro"; usuario: string };
 
@@ -18,6 +22,7 @@ export function App() {
   if (estado.tipo === "cargando") return <div className="cargando" aria-busy="true" />;
   if (estado.tipo === "fuera")
     return <Login aviso={estado.aviso} alIngresar={(usuario) => setEstado({ tipo: "dentro", usuario })} />;
+  if (esVentanaEnVivo) return <EnVivo />;
   return (
     <Dashboard
       usuario={estado.usuario}

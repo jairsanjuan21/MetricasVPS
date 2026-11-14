@@ -42,7 +42,7 @@ export type Presencia = {
     dispositivos: number;
   };
   conteo: { conectados: number; catalogo: number; formulario: number };
-  hoy: { pico: number; enviados: number };
+  hoy: { pico: number; enviados: number; nataliaSeg: number };
   sesiones: SesionVisitante[];
 };
 
