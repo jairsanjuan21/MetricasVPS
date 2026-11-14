@@ -1,20 +1,22 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SelectorTema } from "../tema.tsx";
 import { useHistorial, useReloj, useVivo } from "../useVivo.ts";
-import { bytes, duracion, gib, haceCuanto, hora, num, pct, tiempoDesde } from "../formato.ts";
+import { bytes, duracion, gib, num, pct } from "../formato.ts";
 import { Grafica } from "../componentes/Grafica.tsx";
 import { Servicios } from "../componentes/Servicios.tsx";
 import { Alertas } from "../componentes/Alertas.tsx";
-import type { Evento, Instantanea, Presencia, Rango } from "../tipos.ts";
+import { Actividad, Catalogo } from "../componentes/Catalogo.tsx";
+import type { Instantanea, Rango } from "../tipos.ts";
 import {
   IconoAbajo,
   IconoArriba,
   IconoCampana,
-  IconoLapiz,
   IconoPulso,
   IconoResumen,
   IconoSalir,
   IconoServidor,
   IconoUsuarios,
+  IconoVentana,
 } from "../iconos.tsx";
 
 type Props = { usuario: string; alSalir: () => void };
@@ -25,9 +27,17 @@ const RANGOS: { id: Rango; texto: string; inicio: string }[] = [
   { id: "24h", texto: "24 h", inicio: "hace 24 h" },
 ];
 
-const AZUL = "#38bdf8";
-const LILA = "#c4b5fd";
-const AMBAR = "#f59e0b";
+// Colores desde las variables CSS: así las gráficas cambian solas con el tema claro/oscuro
+const AZUL = "var(--azul)";
+const LILA = "var(--lila)";
+const AMBAR = "var(--ambar)";
+
+const SECCIONES = [
+  { id: "resumen", texto: "Resumen", Icono: IconoResumen },
+  { id: "catalogo", texto: "Usuarios en vivo", Icono: IconoUsuarios },
+  { id: "servicios", texto: "Servicios", Icono: IconoServidor },
+  { id: "alertas", texto: "Alertas", Icono: IconoCampana },
+] as const;
 
 export function Dashboard({ usuario, alSalir }: Props) {
   const { estado, conectado, oyentesMuestra } = useVivo();
@@ -45,23 +55,13 @@ export function Dashboard({ usuario, alSalir }: Props) {
           </span>
           <span className="logo__texto">VPS Monitor</span>
         </div>
-        <nav aria-label="Secciones" className="lateral__nav">
-          <a className="nav nav--activa" href="#resumen">
-            <IconoResumen /> Resumen
-          </a>
-          <a className="nav" href="#catalogo">
-            <IconoUsuarios /> Usuarios en vivo
-          </a>
-          <a className="nav" href="#servicios">
-            <IconoServidor /> Servicios
-          </a>
-          <a className="nav" href="#alertas">
-            <IconoCampana /> Alertas
-          </a>
-        </nav>
+        <MenuSecciones />
         <div className="lateral__pie">
-          <strong>{usuario}</strong>
-          <span className="tenue">{conectado ? "Conectado en vivo" : "Reconectando…"}</span>
+          <div className="lateral__usuario">
+            <strong>{usuario}</strong>
+            <span className="tenue">{conectado ? "Conectado en vivo" : "Reconectando…"}</span>
+          </div>
+          <SelectorTema />
           <button type="button" className="enlace-boton" onClick={alSalir}>
             <IconoSalir tam={16} /> Cerrar sesión
           </button>
@@ -178,7 +178,9 @@ export function Dashboard({ usuario, alSalir }: Props) {
 
         <div id="catalogo" className="seccion-titulo">
           <h2>Catálogo Fersautos · usuarios en vivo</h2>
-          <span className="tenue">Se actualiza al instante</span>
+          <button type="button" className="boton boton--icono-texto" onClick={abrirVentanaEnVivo}>
+            <IconoVentana tam={16} /> Abrir en ventana aparte
+          </button>
         </div>
 
         {estado && <Catalogo p={estado.presencia} ahora={ahora} />}
@@ -198,6 +200,81 @@ export function Dashboard({ usuario, alSalir }: Props) {
 }
 
 // ---------- Piezas ----------
+
+/** Abre /en-vivo en una ventana propia (si ya está abierta, la reutiliza en vez de abrir otra). */
+function abrirVentanaEnVivo() {
+  const w = window.open("/en-vivo", "fersautos-en-vivo", "popup,width=980,height=820");
+  w?.focus();
+}
+
+/**
+ * Menú lateral con "scroll spy": mientras bajas por la página, una pastilla se desliza hasta
+ * la sección que estás viendo y el riel de la izquierda se va llenando con tu progreso.
+ */
+function MenuSecciones() {
+  const [activa, setActiva] = useState(0);
+  const nav = useRef<HTMLElement>(null);
+  const enlaces = useRef<(HTMLAnchorElement | null)[]>([]);
+
+  // ¿Qué sección está en la parte alta de la pantalla?
+  useEffect(() => {
+    let cuadro = 0;
+    const calcular = () => {
+      cuadro = 0;
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - innerHeight;
+      const progreso = max > 0 ? Math.min(1, scrollY / max) : 0;
+      nav.current?.style.setProperty("--progreso", String(progreso));
+
+      // Al llegar al fondo, la última sección (puede ser muy corta para subir hasta arriba)
+      if (progreso > 0.995) return setActiva(SECCIONES.length - 1);
+      const linea = innerHeight * 0.35;
+      let actual = 0;
+      SECCIONES.forEach((sec, i) => {
+        const el = document.getElementById(sec.id);
+        if (el && (i === 0 || el.getBoundingClientRect().top <= linea)) actual = i;
+      });
+      setActiva(actual);
+    };
+    const alDesplazar = () => {
+      cuadro ||= requestAnimationFrame(calcular);
+    };
+    calcular();
+    addEventListener("scroll", alDesplazar, { passive: true });
+    addEventListener("resize", alDesplazar);
+    return () => {
+      removeEventListener("scroll", alDesplazar);
+      removeEventListener("resize", alDesplazar);
+      cancelAnimationFrame(cuadro);
+    };
+  }, []);
+
+  // Mueve la pastilla al enlace activo
+  useEffect(() => {
+    const el = enlaces.current[activa];
+    if (el) nav.current?.style.setProperty("--y", `${el.offsetTop}px`);
+  }, [activa]);
+
+  return (
+    <nav aria-label="Secciones" className="lateral__nav" ref={nav}>
+      <span className="lateral__riel" aria-hidden="true" />
+      <span className="lateral__indicador" aria-hidden="true" />
+      {SECCIONES.map(({ id, texto, Icono }, i) => (
+        <a
+          key={id}
+          ref={(el) => {
+            enlaces.current[i] = el;
+          }}
+          className="nav"
+          href={`#${id}`}
+          aria-current={activa === i ? "true" : undefined}
+        >
+          <Icono /> {texto}
+        </a>
+      ))}
+    </nav>
+  );
+}
 
 function Barra({ valor }: { valor: number }) {
   const v = Math.max(0, Math.min(100, valor));
@@ -256,134 +333,5 @@ function Kpis({ m }: { m: Instantanea }) {
         </div>
       ))}
     </div>
-  );
-}
-
-function Catalogo({ p, ahora }: { p: Presencia; ahora: number }) {
-  const n = p.natalia;
-  return (
-    <div className="fila">
-      <section className="tarjeta tarjeta--angosta natalia">
-        <div className="natalia__cabeza">
-          <div className={n.enLinea ? "avatar avatar--en-linea" : "avatar"}>N</div>
-          <div>
-            <strong className="natalia__nombre">Natalia</strong>
-            <span className="tenue chico">Usuaria principal · administra el catálogo</span>
-          </div>
-        </div>
-        <div className={n.enLinea ? "presencia presencia--en-linea" : "presencia"} role="status">
-          <span className={n.enLinea ? "punto punto--vivo" : "punto punto--apagado"} />
-          {n.enLinea
-            ? `En línea · conectada desde las ${hora(n.desde!)}`
-            : n.ultimaVez
-              ? `Desconectada · última vez ${haceCuanto(n.ultimaVez, ahora)}`
-              : "Desconectada"}
-        </div>
-        {n.enLinea && (
-          <dl className="natalia__datos">
-            <div>
-              <dt>Viendo</dt>
-              <dd>{n.pagina}</dd>
-            </div>
-            <div>
-              <dt>Dispositivo</dt>
-              <dd>
-                {n.dispositivo}
-                {n.dispositivos > 1 ? ` (+${n.dispositivos - 1})` : ""}
-              </dd>
-            </div>
-          </dl>
-        )}
-      </section>
-
-      <div className="catalogo">
-        <div className="tarjeta contador">
-          <span className="tenue">Conectados ahora</span>
-          <span className="cifra-enorme">{p.conteo.conectados}</span>
-          <span className="tenue chico">pico de hoy: {p.hoy.pico}</span>
-        </div>
-        <div className="tarjeta contador">
-          <span className="tenue">Viendo el catálogo</span>
-          <span className="cifra-enorme">{p.conteo.catalogo}</span>
-          <span className="tenue chico">visitantes sin formulario abierto</span>
-        </div>
-        <div className="tarjeta contador contador--formulario">
-          <span className="contador__titulo">
-            <IconoLapiz tam={14} /> Llenando formulario
-          </span>
-          <span className="cifra-enorme">{p.conteo.formulario}</span>
-          <span className="chico">enviados hoy: {p.hoy.enviados}</span>
-        </div>
-
-        <section className="tarjeta tarjeta--tabla">
-          <h3 className="tarjeta__barra">Sesiones activas</h3>
-          {p.sesiones.length === 0 ? (
-            <p className="vacio">Nadie navegando el catálogo en este momento.</p>
-          ) : (
-            <div className="tabla-scroll">
-              <table className="tabla">
-                <thead>
-                  <tr>
-                    <th scope="col">Visitante</th>
-                    <th scope="col">Actividad</th>
-                    <th scope="col">Página</th>
-                    <th scope="col">Dispositivo</th>
-                    <th scope="col" className="derecha">
-                      Tiempo
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {p.sesiones.map((s) => (
-                    <tr key={s.alias}>
-                      <td className="mono">{s.alias}</td>
-                      <td>
-                        {s.actividad === "formulario" ? (
-                          <span className="insignia insignia--formulario">{s.escribiendo ? "Escribiendo…" : "En el formulario"}</span>
-                        ) : (
-                          <span className="insignia">Viendo catálogo</span>
-                        )}
-                      </td>
-                      <td>{s.pagina}</td>
-                      <td className="tenue">{s.dispositivo}</td>
-                      <td className="mono tenue derecha">{tiempoDesde(s.desde, ahora)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-const COLOR_EVENTO: Record<Evento["tipo"], string> = {
-  natalia_conectada: "punto--vivo-fijo",
-  natalia_desconectada: "punto--apagado",
-  formulario_abierto: "punto--ambar",
-  formulario_enviado: "punto--lila",
-  alerta: "punto--ambar",
-  alerta_resuelta: "punto--apagado",
-  servicio: "punto--vivo-fijo",
-};
-
-function Actividad({ eventos, ahora }: { eventos: Evento[]; ahora: number }) {
-  if (eventos.length === 0) return <p className="vacio">Sin actividad desde que arrancó el monitor.</p>;
-  return (
-    <ol className="actividad">
-      {eventos.slice(0, 8).map((e) => (
-        <li key={e.id}>
-          <span className={`punto ${COLOR_EVENTO[e.tipo]}`} />
-          <div>
-            <span>{e.texto}</span>
-            <time className="mono tenue chico" dateTime={new Date(e.ts).toISOString()} title={hora(e.ts)}>
-              {haceCuanto(e.ts, ahora)}
-            </time>
-          </div>
-        </li>
-      ))}
-    </ol>
   );
 }

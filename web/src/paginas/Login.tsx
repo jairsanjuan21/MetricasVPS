@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, ErrorApi } from "../api.ts";
+import { SelectorTema } from "../tema.tsx";
 import { IconoAlerta, IconoCandado, IconoFlechaDerecha, IconoOjo, IconoOjoTachado, IconoPulso } from "../iconos.tsx";
 
 type Props = { aviso?: string; alIngresar: (usuario: string) => void };
@@ -69,6 +70,9 @@ export function Login({ aviso, alIngresar }: Props) {
       </section>
 
       <section className="login__lado">
+        <div className="login__tema">
+          <SelectorTema compacto />
+        </div>
         <form className="login__form" onSubmit={enviar} noValidate>
           <div className="login__encabezado">
             <h2>Iniciar sesión</h2>

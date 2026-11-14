@@ -120,3 +120,28 @@ export const IconoCerrar = (p: P) => (
     <line x1="6" y1="6" x2="18" y2="18" />
   </Base>
 );
+export const IconoSol = (p: P) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+  </Base>
+);
+export const IconoLuna = (p: P) => (
+  <Base {...p}>
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  </Base>
+);
+export const IconoMonitor = (p: P) => (
+  <Base {...p}>
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <line x1="8" y1="21" x2="16" y2="21" />
+    <line x1="12" y1="17" x2="12" y2="21" />
+  </Base>
+);
+export const IconoVentana = (p: P) => (
+  <Base {...p}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </Base>
+);

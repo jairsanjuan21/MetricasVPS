@@ -1,6 +1,7 @@
 import { useRef, useState, type PointerEvent } from "react";
 import { hora } from "../formato.ts";
 
+/** color acepta variables CSS (var(--azul)) para que cambie con el tema */
 export type Serie = { nombre: string; valores: number[]; color: string; discontinua?: boolean; area?: boolean; formato: (v: number) => string };
 
 type Props = {
@@ -48,14 +49,16 @@ export function Grafica({ series, tiempos, max, alto, etiqueta, ejeY }: Props) {
         ))}
         <line x1="0" y1={H} x2={W} y2={H} className="grafica__base" />
         {series.map((s) =>
-          s.area && n > 1 ? <polygon key={s.nombre + "a"} points={`0,${H} ${puntos(s.valores)} ${W},${H}`} fill={s.color} fillOpacity={0.12} /> : null,
+          s.area && n > 1 ? (
+            <polygon key={s.nombre + "a"} points={`0,${H} ${puntos(s.valores)} ${W},${H}`} style={{ fill: s.color, fillOpacity: 0.12 }} />
+          ) : null,
         )}
         {series.map((s) => (
           <polyline
             key={s.nombre}
             points={puntos(s.valores)}
             fill="none"
-            stroke={s.color}
+            style={{ stroke: s.color }}
             strokeWidth={2}
             strokeDasharray={s.discontinua ? "6 4" : undefined}
             vectorEffect="non-scaling-stroke"
