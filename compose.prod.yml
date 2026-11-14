@@ -20,9 +20,13 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     depends_on: [docker-proxy]
+    # Sin dominio: el panel NO se publica en internet. Solo escucha en el 127.0.0.1 del VPS
+    # y se entra con un túnel SSH (ver README). Docker no abre este puerto hacia afuera.
+    ports:
+      - "127.0.0.1:4000:4000"
     networks:
       proxy:
-        aliases: [metricas-app]       # nombre con el que Caddy y el catálogo encuentran el monitor
+        aliases: [metricas-app]       # nombre con el que el catálogo encuentra el monitor
       docker: {}
     deploy:
       resources:

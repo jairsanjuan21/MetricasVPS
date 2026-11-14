@@ -67,11 +67,7 @@ Revisar tipos: `npm run typecheck`.
 
 Sigue la misma estructura de la guía del VPS (`/opt/apps/<proyecto>`, red `proxy` de Caddy).
 
-### 1. DNS
-
-Crea un registro **A** `monitor.tudominio.com` → IP del VPS (o usa `monitor.IP-CON-GUIONES.sslip.io` para probar).
-
-### 2. Clonar y configurar
+### 1. Clonar y configurar
 
 ```bash
 cd /opt/apps
@@ -84,7 +80,7 @@ docker compose -f compose.prod.yml run --rm --no-deps app node server/scripts/ge
 nano .env.production     # pega ADMIN_CLAVE_HASH (con las comillas simples) e INGESTA_TOKEN
 ```
 
-### 3. Levantar
+### 2. Levantar
 
 ```bash
 docker compose -f compose.prod.yml up -d
@@ -95,25 +91,24 @@ docker compose -f compose.prod.yml logs -f app
 En los logs **no** debe aparecer `No se pudo leer 1/net/dev`. Si aparece, la red mostrada sería la del contenedor:
 avísame y lo ajustamos.
 
-### 4. Caddy
+### 3. Entrar al panel (túnel SSH, sin dominio)
 
-En `/opt/proxy/Caddyfile` agrega:
+El panel **no está publicado en internet**: solo escucha en `127.0.0.1:4000` dentro del VPS.
+Para verlo, desde tu PC abres un túnel SSH que trae ese puerto a tu computador:
 
-```caddy
-monitor.tudominio.com {
-	encode zstd gzip
-	# La ingesta solo se usa desde la red interna de Docker: desde internet no existe
-	@ingesta path /ingesta/*
-	respond @ingesta 404
-	reverse_proxy metricas-app:4000
-}
+```powershell
+ssh -N -L 4000:127.0.0.1:4000 jair@IP_DEL_VPS
 ```
 
-```bash
-cd /opt/proxy && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
-```
+Deja esa ventana abierta y entra a **http://localhost:4000**. Al cerrar la ventana, el panel deja de ser accesible.
+Es la opción más segura: para llegar al login primero hay que tener tu llave SSH.
 
-### 5. Conectar el catálogo
+Desde el celular: apps como Termius permiten el mismo túnel ("Port Forwarding" local 4000 → 127.0.0.1:4000).
+
+> ¿Algún día quieres abrirlo con dominio? Quita `ports:` del compose y agrega en Caddy un bloque con
+> `@ingesta path /ingesta/*`, `respond @ingesta 404` y `reverse_proxy metricas-app:4000`.
+
+### 4. Conectar el catálogo
 
 En `/opt/apps/fersautos/.env.production` agrega:
 
@@ -134,7 +129,7 @@ docker image prune -f
 
 ## Seguridad: decisiones y por qué
 
-- **Sin puertos publicados**: solo Caddy (80/443) da a internet. La ingesta (`/ingesta/*`) se bloquea en Caddy y además pide token.
+- **El panel no está en internet**: solo escucha en `127.0.0.1` del VPS y se entra por túnel SSH. La ingesta además pide token.
 - **Contraseña**: solo se guarda el hash scrypt. 5 intentos fallidos por IP → bloqueo de 15 min. La sesión vence a los 30 min sin actividad (el dashboard abierto cuenta como actividad).
 - **Cookie** `httpOnly` + `Secure` + `SameSite=Strict`, y además se verifica el `Origin` en peticiones que cambian algo.
 - **CSP estricta**: la página solo carga recursos del propio servidor (las fuentes van empaquetadas, no se piden a Google).
