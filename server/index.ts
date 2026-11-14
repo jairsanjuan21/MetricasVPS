@@ -14,6 +14,7 @@ import { alCambiarPresencia, iniciarLimpiezaPresencia, registrarLatido, resumenP
 import { iniciarDocker, logs, reiniciar, resumenServicios } from "./docker.ts";
 import { avisar, guardarAlertas, iniciarAlertas, leerAlertas } from "./alertas.ts";
 import { alPublicar, eventosRecientes } from "./eventos.ts";
+import { iniciarBot } from "./telegram.ts";
 
 const app = new Hono();
 
@@ -139,7 +140,7 @@ privada.get("/servicios/:id/logs", async (c) => {
 privada.get("/alertas", (c) => c.json(leerAlertas()));
 privada.put("/alertas", bodyLimit({ maxSize: 4 * 1024 }), async (c) => c.json(guardarAlertas(await c.req.json().catch(() => null))));
 privada.post("/alertas/prueba", async (c) => {
-  const r = await avisar("Mensaje de prueba: las alertas llegan bien a este chat.", true);
+  const r = await avisar("🖥 Mensaje de prueba: las alertas llegan bien a este chat.", true);
   return r.ok ? c.json({ estado: "ok" }) : c.json({ mensaje: r.motivo }, 400);
 });
 
@@ -159,7 +160,7 @@ if (existsSync(WEB)) {
 
 // ---------- Arranque ----------
 
-const paradas = [iniciarRecolector(), iniciarLimpiezaPresencia(), iniciarDocker(), iniciarAlertas()];
+const paradas = [iniciarRecolector(), iniciarLimpiezaPresencia(), iniciarDocker(), iniciarAlertas(), iniciarBot()];
 
 const servidor = serve({ fetch: app.fetch, port: config.puerto, hostname: "0.0.0.0" }, (info) =>
   console.log(`[monitor] Escuchando en http://localhost:${info.port} (${config.enProduccion ? "producción" : "desarrollo"})`),

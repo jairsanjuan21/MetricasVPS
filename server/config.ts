@@ -53,6 +53,8 @@ export const config = {
   telegram: {
     token: process.env.TELEGRAM_TOKEN ?? "",
     chatId: process.env.TELEGRAM_CHAT_ID ?? "",
+    /** "0" quita el comando /reiniciar del bot. */
+    permitirReinicio: process.env.TELEGRAM_REINICIAR !== "0",
   },
 };
 

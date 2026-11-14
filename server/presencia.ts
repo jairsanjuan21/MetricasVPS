@@ -147,7 +147,12 @@ function revisarNatalia(antes: boolean) {
 
 /** Limpia sesiones que dejaron de latir. */
 export function iniciarLimpiezaPresencia() {
+  const sumarNatalia = db.prepare(
+    "INSERT INTO catalogo_dia (dia, natalia_seg) VALUES (?, 5) ON CONFLICT(dia) DO UPDATE SET natalia_seg = natalia_seg + 5",
+  );
   const t = setInterval(() => {
+    // Tiempo que Natalia pasa conectada hoy (para el resumen /hoy del bot)
+    if (nataliaEnLinea()) sumarNatalia.run(diaLocal());
     const antes = nataliaEnLinea();
     let cambio = false;
     for (const [sid, s] of sesiones) {
@@ -192,9 +197,9 @@ export function resumenPresencia() {
   const todas = [...sesiones.values()];
   const visitantes = todas.filter((s) => s.rol === "visitante").sort((a, b) => a.desde - b.desde);
   const deNatalia = todas.filter((s) => s.rol === "asesora").sort((a, b) => b.ultimo - a.ultimo);
-  const hoy = (db.prepare("SELECT pico, enviados FROM catalogo_dia WHERE dia = ?").get(diaLocal()) as
-    | { pico: number; enviados: number }
-    | undefined) ?? { pico: 0, enviados: 0 };
+  const hoy = (db.prepare("SELECT pico, enviados, natalia_seg AS nataliaSeg FROM catalogo_dia WHERE dia = ?").get(diaLocal()) as
+    | { pico: number; enviados: number; nataliaSeg: number }
+    | undefined) ?? { pico: 0, enviados: 0, nataliaSeg: 0 };
 
   const formulario = visitantes.filter((s) => s.actividad === "formulario").length;
   const actual = deNatalia[0];

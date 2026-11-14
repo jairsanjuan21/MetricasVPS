@@ -36,7 +36,9 @@ server/
   metricas.ts    recolector de /proc (+ modo simulado para Windows)
   presencia.ts   usuarios en vivo del catálogo
   docker.ts      contenedores, estadísticas, logs, reinicio
-  alertas.ts     umbrales sostenidos y avisos por Telegram
+  alertas.ts     umbrales sostenidos, avisos y /silencio
+  telegram.ts    comandos del bot (/estado, /usuarios, /reiniciar...)
+  telegram-api.ts  llamadas a la API de Telegram
   eventos.ts     "Actividad reciente"
   db.ts          SQLite
 web/src/         React: Login, Dashboard y componentes
@@ -135,6 +137,20 @@ y redespliega el catálogo (`git pull`, `build`, `up -d app`).
 4. En el panel, sección **Alertas por Telegram**, toca **Enviar prueba**.
 
 El bot solo le escribe a ese chat; si otra persona le habla al bot, no pasa nada.
+
+**Comandos del bot** (aparecen solos en el menú `/` del chat):
+
+| Comando | Qué hace |
+|---|---|
+| `/estado` | CPU, RAM, swap, disco, red y ciclo de ancho de banda |
+| `/usuarios` | Natalia y los visitantes del catálogo, quién está en el formulario |
+| `/servicios` | Contenedores con su estado y consumo |
+| `/hoy` | Resumen del día: catálogo, servidor y alertas |
+| `/silencio 1h` | Pausa las alertas (`30m`, `2h`, `8h`; `/silencio 0` las reactiva) |
+| `/reiniciar` | Botones para reiniciar un servicio, con confirmación (`TELEGRAM_REINICIAR=0` lo quita) |
+
+Funciona con *long polling*: el monitor le pregunta a Telegram por mensajes nuevos, así que no necesita dominio.
+Al arrancar descarta los comandos que llegaron mientras estaba apagado.
 
 ### Actualizar el monitor
 

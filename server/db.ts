@@ -40,6 +40,13 @@ db.exec(`
   );
 `);
 
+// Columnas agregadas después de la primera versión (SQLite no tiene "ADD COLUMN IF NOT EXISTS")
+try {
+  db.exec("ALTER TABLE catalogo_dia ADD COLUMN natalia_seg INTEGER NOT NULL DEFAULT 0");
+} catch {
+  /* ya existe */
+}
+
 /** Fecha local de Colombia (AAAA-MM-DD), para que "hoy" cambie a medianoche de Bogotá y no de UTC. */
 export function diaLocal(fecha = new Date()): string {
   return fecha.toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
