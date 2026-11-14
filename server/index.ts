@@ -12,7 +12,7 @@ import { COOKIE, cerrarSesion, estadoSesion, exigirSesion, iniciarSesion, mismoO
 import { alNuevaMuestra, historial, iniciarRecolector, ultimaInstantanea, type Rango } from "./metricas.ts";
 import { alCambiarPresencia, iniciarLimpiezaPresencia, registrarLatido, resumenPresencia, validarLatido } from "./presencia.ts";
 import { iniciarDocker, logs, reiniciar, resumenServicios } from "./docker.ts";
-import { guardarAlertas, iniciarAlertas, leerAlertas } from "./alertas.ts";
+import { avisar, guardarAlertas, iniciarAlertas, leerAlertas } from "./alertas.ts";
 import { alPublicar, eventosRecientes } from "./eventos.ts";
 
 const app = new Hono();
@@ -138,6 +138,10 @@ privada.get("/servicios/:id/logs", async (c) => {
 
 privada.get("/alertas", (c) => c.json(leerAlertas()));
 privada.put("/alertas", bodyLimit({ maxSize: 4 * 1024 }), async (c) => c.json(guardarAlertas(await c.req.json().catch(() => null))));
+privada.post("/alertas/prueba", async (c) => {
+  const r = await avisar("Mensaje de prueba: las alertas llegan bien a este chat.", true);
+  return r.ok ? c.json({ estado: "ok" }) : c.json({ mensaje: r.motivo }, 400);
+});
 
 app.route("/api", privada);
 

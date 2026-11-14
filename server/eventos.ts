@@ -1,7 +1,7 @@
 /**
  * Registro de "Actividad reciente" del dashboard y bus de eventos interno.
  * Los módulos publican aquí (presencia, alertas, servicios) y quien quiera escucha:
- * el SSE para refrescar la pantalla y las alertas para mandar correos.
+ * el SSE para refrescar la pantalla y las alertas para avisar por Telegram.
  */
 
 export type TipoEvento =

@@ -1127,6 +1127,12 @@ input {
 }
 
 /* Alertas */
+.alertas__estado {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .alertas {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

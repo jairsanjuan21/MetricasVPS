@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import type { AjustesAlertas } from "../tipos.ts";
 
-type Respuesta = { ajustes: AjustesAlertas; correoConfigurado: boolean };
+type Respuesta = { ajustes: AjustesAlertas; telegramConfigurado: boolean };
 
 /** Interruptores de alertas: cada cambio se guarda al instante en el servidor. */
 export function Alertas() {
   const [datos, setDatos] = useState<Respuesta | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [prueba, setPrueba] = useState<string | null>(null);
 
   useEffect(() => {
     api<Respuesta>("/alertas").then(setDatos).catch(() => {});
@@ -38,10 +39,32 @@ export function Alertas() {
   return (
     <section id="alertas" className="tarjeta">
       <div className="tarjeta__cabeza">
-        <h2>Alertas por correo</h2>
-        <span className="tenue chico">
-          {guardando ? "Guardando…" : datos.correoConfigurado ? "Se envían al correo del administrador" : "SMTP sin configurar: solo se verán en Actividad reciente"}
-        </span>
+        <h2>Alertas por Telegram</h2>
+        <div className="alertas__estado">
+          <span className="tenue chico" role="status">
+            {guardando
+              ? "Guardando…"
+              : (prueba ??
+                (datos.telegramConfigurado ? "Llegan a tu chat de Telegram" : "Bot sin configurar: solo se verán en Actividad reciente"))}
+          </span>
+          {datos.telegramConfigurado && (
+            <button
+              type="button"
+              className="boton"
+              onClick={async () => {
+                setPrueba("Enviando…");
+                try {
+                  await api("/alertas/prueba", { metodo: "POST" });
+                  setPrueba("Mensaje de prueba enviado. Revisa Telegram.");
+                } catch (e) {
+                  setPrueba(e instanceof Error ? e.message : "No se pudo enviar");
+                }
+              }}
+            >
+              Enviar prueba
+            </button>
+          )}
+        </div>
       </div>
       <div className="alertas">
         {filas.map((f) => (

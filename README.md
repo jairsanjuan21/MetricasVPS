@@ -5,7 +5,7 @@ Panel privado para vigilar el VPS (Hostinger KVM 2) y los proyectos que corren e
 - **Servidor en vivo**: CPU, RAM, memoria auxiliar (swap), disco, tráfico entrante/saliente y ancho de banda del ciclo.
 - **Catálogo Fersautos en vivo**: si Natalia está conectada, cuántos visitantes ven el catálogo y cuántos están llenando el formulario de crédito.
 - **Servicios**: estado de cada contenedor Docker, consumo, logs y reinicio (con confirmación).
-- **Alertas**: CPU/RAM sostenidas, disco lleno, servicio caído, Natalia conectada, formulario enviado (en el panel y, si configuras SMTP, por correo).
+- **Alertas**: CPU/RAM sostenidas, disco lleno, servicio caído, Natalia conectada, formulario enviado (en el panel y por **Telegram**).
 - **Login** de un solo administrador: contraseña con hash scrypt, cookie httpOnly, bloqueo por intentos fallidos.
 
 ## Cómo funciona
@@ -36,7 +36,7 @@ server/
   metricas.ts    recolector de /proc (+ modo simulado para Windows)
   presencia.ts   usuarios en vivo del catálogo
   docker.ts      contenedores, estadísticas, logs, reinicio
-  alertas.ts     umbrales sostenidos y correos
+  alertas.ts     umbrales sostenidos y avisos por Telegram
   eventos.ts     "Actividad reciente"
   db.ts          SQLite
 web/src/         React: Login, Dashboard y componentes
@@ -118,6 +118,23 @@ METRICAS_TOKEN=<el mismo INGESTA_TOKEN>
 ```
 
 y redespliega el catálogo (`git pull`, `build`, `up -d app`).
+
+### 5. Alertas por Telegram
+
+1. En Telegram busca **@BotFather**, escribe `/newbot`, ponle nombre (ej. "VPS Jair") y un usuario que termine en `bot`.
+   Te da un **token** tipo `123456789:AAH...`. Trátalo como una contraseña.
+2. Abre tu bot nuevo (el enlace `t.me/...` que te da BotFather), toca **Iniciar** y mándale `hola`.
+3. En el VPS:
+   ```bash
+   cd /opt/apps/metricas
+   nano .env.production          # TELEGRAM_TOKEN=el-token
+   docker compose -f compose.prod.yml run --rm --no-deps app node server/scripts/telegram-chat-id.ts
+   nano .env.production          # TELEGRAM_CHAT_ID=el-número-que-salió
+   docker compose -f compose.prod.yml up -d
+   ```
+4. En el panel, sección **Alertas por Telegram**, toca **Enviar prueba**.
+
+El bot solo le escribe a ese chat; si otra persona le habla al bot, no pasa nada.
 
 ### Actualizar el monitor
 

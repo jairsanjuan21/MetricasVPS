@@ -49,14 +49,10 @@ export const config = {
   // --- Datos persistentes (SQLite). Su volumen vive en el disco del VPS: también sirve para medir el disco. ---
   datosDir: process.env.DATOS_DIR ?? join(process.cwd(), "datos"),
 
-  // --- Correo para alertas (opcional) ---
-  smtp: {
-    host: process.env.SMTP_HOST ?? "",
-    puerto: numero("SMTP_PUERTO", 587),
-    usuario: process.env.SMTP_USUARIO ?? "",
-    clave: process.env.SMTP_CLAVE ?? "",
-    remitente: process.env.SMTP_REMITENTE ?? "",
-    destino: process.env.ALERTAS_CORREO ?? "",
+  // --- Alertas por Telegram (opcional) ---
+  telegram: {
+    token: process.env.TELEGRAM_TOKEN ?? "",
+    chatId: process.env.TELEGRAM_CHAT_ID ?? "",
   },
 };
 
