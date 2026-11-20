@@ -1,65 +1,171 @@
 import { useEffect, useRef, useState } from "react";
 import { SelectorTema } from "../tema.tsx";
-import { useHistorial, useReloj, useVivo } from "../useVivo.ts";
-import { bytes, duracion, gib, num, pct } from "../formato.ts";
-import { Grafica } from "../componentes/Grafica.tsx";
+import { useReloj, useVivo } from "../useVivo.ts";
+import { enlace, navegar, useRuta } from "../ruta.ts";
 import { Servicios } from "../componentes/Servicios.tsx";
 import { Alertas } from "../componentes/Alertas.tsx";
-import { Actividad, Catalogo } from "../componentes/Catalogo.tsx";
-import type { Instantanea, Rango } from "../tipos.ts";
+import { General } from "../vistas/General.tsx";
+import { Servidor } from "../vistas/Servidor.tsx";
+import { Logs } from "../vistas/Logs.tsx";
+import { Anm } from "../vistas/Anm.tsx";
+import { PanelFersautos } from "./EnVivo.tsx";
+import type { General as DatosGeneral, Proyecto } from "../tipos.ts";
 import {
-  IconoAbajo,
-  IconoArriba,
+  IconoBuscar,
   IconoCampana,
+  IconoCpu,
   IconoPulso,
   IconoResumen,
   IconoSalir,
   IconoServidor,
-  IconoUsuarios,
+  IconoTerminal,
   IconoVentana,
 } from "../iconos.tsx";
 
 type Props = { usuario: string; alSalir: () => void };
 
-const RANGOS: { id: Rango; texto: string; inicio: string }[] = [
-  { id: "15m", texto: "15 min", inicio: "hace 15 min" },
-  { id: "1h", texto: "1 h", inicio: "hace 1 h" },
-  { id: "24h", texto: "24 h", inicio: "hace 24 h" },
-];
-
-// Colores desde las variables CSS: así las gráficas cambian solas con el tema claro/oscuro
-const AZUL = "var(--azul)";
-const LILA = "var(--lila)";
-const AMBAR = "var(--ambar)";
-
-const SECCIONES = [
-  { id: "resumen", texto: "Resumen", Icono: IconoResumen },
-  { id: "catalogo", texto: "Usuarios en vivo", Icono: IconoUsuarios },
-  { id: "servicios", texto: "Servicios", Icono: IconoServidor },
-  { id: "alertas", texto: "Alertas", Icono: IconoCampana },
+const GENERALES = [
+  { ruta: "general", texto: "Vista general", Icono: IconoResumen },
+  { ruta: "servidor", texto: "Servidor", Icono: IconoCpu },
+  { ruta: "logs", texto: "Logs en vivo", Icono: IconoTerminal },
+  { ruta: "contenedores", texto: "Contenedores", Icono: IconoServidor },
+  { ruta: "alertas", texto: "Alertas", Icono: IconoCampana },
 ] as const;
 
+/** Consola del VPS: menú lateral fijo + la sección elegida. */
 export function Dashboard({ usuario, alSalir }: Props) {
-  const { estado, conectado, oyentesMuestra } = useVivo();
-  const [rango, setRango] = useState<Rango>("15m");
-  const puntos = useHistorial(rango, oyentesMuestra);
-  const ahora = useReloj();
-  const m = estado?.metricas;
+  const { estado, general, conectado, oyentesMuestra, oyentesEvento } = useVivo();
+  const ruta = useRuta();
+  const ahora = useReloj(15_000);
+  const [tv, setTv] = useState(false);
+  const [paleta, setPaleta] = useState(false);
+
+  // Ctrl+K (o Cmd+K) abre la paleta para saltar a cualquier sección
+  useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaleta((p) => !p);
+      }
+      if (e.key === "Escape" && tv) salirTv();
+    };
+    addEventListener("keydown", alTeclear);
+    return () => removeEventListener("keydown", alTeclear);
+  });
+
+  function entrarTv() {
+    setTv(true);
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+  function salirTv() {
+    setTv(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  useEffect(() => {
+    const alCambiar = () => !document.fullscreenElement && setTv(false);
+    document.addEventListener("fullscreenchange", alCambiar);
+    return () => document.removeEventListener("fullscreenchange", alCambiar);
+  }, []);
+
+  const proyectos = general?.proyectos ?? [];
+  const servicios = estado?.servicios.servicios ?? [];
+  const claveActiva = ruta.vista === "proyecto" ? `proyecto/${ruta.id}` : ruta.vista;
+
+  let contenido: React.ReactNode;
+  if (ruta.vista === "servidor") contenido = <Servidor m={estado?.metricas ?? null} oyentes={oyentesMuestra} />;
+  else if (ruta.vista === "logs") contenido = <Logs proyectos={proyectos} params={ruta.params} />;
+  else if (ruta.vista === "contenedores")
+    contenido = (
+      <>
+        <header className="cabecera">
+          <div className="cabecera__titulo">
+            <h1>Contenedores</h1>
+            <span className="tenue">Todos los contenedores Docker del VPS, con consumo, logs y reinicio</span>
+          </div>
+        </header>
+        {estado && <Servicios resumen={estado.servicios} />}
+      </>
+    );
+  else if (ruta.vista === "alertas")
+    contenido = (
+      <>
+        <header className="cabecera">
+          <div className="cabecera__titulo">
+            <h1>Alertas</h1>
+            <span className="tenue">Qué te avisa el bot de Telegram</span>
+          </div>
+        </header>
+        <Alertas />
+      </>
+    );
+  else if (ruta.vista === "proyecto" && ruta.id === "fersautos")
+    contenido = (
+      <>
+        <header className="cabecera">
+          <div className="cabecera__titulo">
+            <h1>Fersautos · usuarios en vivo</h1>
+            <span className="tenue">Catálogo de Natalia</span>
+          </div>
+          <div className="cabecera__acciones">
+            <a className="boton boton--enlace" href={enlace("logs", { proyecto: "fersautos" })}>
+              Ver logs
+            </a>
+            <button
+              type="button"
+              className="boton boton--icono-texto"
+              onClick={() => window.open("/en-vivo", "fersautos-en-vivo", "popup,width=980,height=820")?.focus()}
+            >
+              <IconoVentana tam={16} /> Abrir en ventana aparte
+            </button>
+          </div>
+        </header>
+        <PanelFersautos estado={estado} ahora={ahora} />
+      </>
+    );
+  else if (ruta.vista === "proyecto" && ruta.id === "anm")
+    contenido = <Anm g={general} servicios={servicios.filter((s) => s.grupo === "anm")} ahora={ahora} />;
+  else if (ruta.vista === "proyecto")
+    contenido = (
+      <>
+        <header className="cabecera">
+          <div className="cabecera__titulo">
+            <h1>{ruta.id}</h1>
+            <span className="tenue">Proyecto detectado automáticamente en Docker</span>
+          </div>
+          <a className="boton boton--enlace" href={enlace("logs", { proyecto: ruta.id })}>
+            Ver logs
+          </a>
+        </header>
+        {estado && <Servicios resumen={{ ...estado.servicios, servicios: servicios.filter((s) => s.grupo === ruta.id) }} />}
+      </>
+    );
+  else contenido = <General estado={estado} general={general} ahora={ahora} oyentesEvento={oyentesEvento} alModoTv={entrarTv} />;
 
   return (
-    <div className="app">
+    <div className={tv ? "app app--tv" : "app"}>
       <aside className="lateral">
         <div className="logo logo--chico">
           <span className="logo__icono">
             <IconoPulso tam={18} />
           </span>
-          <span className="logo__texto">VPS Monitor</span>
+          <span className="logo__columna">
+            <span className="logo__texto">VPS Monitor</span>
+            <span className="mono tenue chico">{conectado ? "en vivo" : "reconectando…"}</span>
+          </span>
         </div>
-        <MenuSecciones />
+
+        <button type="button" className="lateral__buscar" onClick={() => setPaleta(true)}>
+          <span>
+            <IconoBuscar tam={14} /> Buscar o saltar a…
+          </span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
+        <Menu activa={claveActiva} proyectos={proyectos} general={general} />
+
         <div className="lateral__pie">
           <div className="lateral__usuario">
             <strong>{usuario}</strong>
-            <span className="tenue">{conectado ? "Conectado en vivo" : "Reconectando…"}</span>
           </div>
           <SelectorTema />
           <button type="button" className="enlace-boton" onClick={alSalir}>
@@ -68,270 +174,150 @@ export function Dashboard({ usuario, alSalir }: Props) {
         </div>
       </aside>
 
-      <main id="resumen" className="contenido">
-        <header className="cabecera">
-          <div className="cabecera__titulo">
-            <h1>Resumen del servidor</h1>
-            <div className="chips">
-              <span className="chip">Hostinger KVM 2</span>
-              <span className="chip">{m ? `${m.cpu.nucleos} vCPU · ${gib(m.ram.totalB, 0)} GB RAM` : "…"}</span>
-              {m && <span className="chip">encendido hace {duracion(m.uptimeSeg)}</span>}
-            </div>
-          </div>
-          <div className="cabecera__acciones">
-            <span className="en-vivo">
-              <span className={conectado ? "punto punto--vivo" : "punto punto--apagado"} />
-              {conectado ? "En vivo · cada 2 s" : "Sin conexión"}
-            </span>
-            <div role="group" aria-label="Rango de tiempo" className="segmentado">
-              {RANGOS.map((r) => (
-                <button key={r.id} type="button" aria-pressed={rango === r.id} onClick={() => setRango(r.id)}>
-                  {r.texto}
-                </button>
-              ))}
-            </div>
-          </div>
-        </header>
-
-        {!estado ? <p className="tenue">Conectando con el servidor…</p> : null}
-        {m && <Kpis m={m} />}
-
-        <div className="fila">
-          <section className="tarjeta tarjeta--ancha">
-            <div className="tarjeta__cabeza">
-              <h2>CPU y RAM</h2>
-              <div className="leyenda">
-                <span>
-                  <i className="leyenda__linea" style={{ background: AZUL }} />
-                  CPU
-                </span>
-                <span>
-                  <i className="leyenda__guiones" style={{ borderColor: LILA }} />
-                  RAM
-                </span>
-              </div>
-            </div>
-            <Grafica
-              etiqueta="Uso de CPU y RAM en el tiempo"
-              alto={200}
-              max={100}
-              ejeY={["100 %", "50 %", "0 %"]}
-              tiempos={puntos.map((p) => p.ts)}
-              series={[
-                { nombre: "CPU", valores: puntos.map((p) => p.cpu), color: AZUL, area: true, formato: pct },
-                { nombre: "RAM", valores: puntos.map((p) => p.ram), color: LILA, discontinua: true, formato: pct },
-              ]}
-            />
-            <div className="eje-x">
-              <span>{RANGOS.find((r) => r.id === rango)!.inicio}</span>
-              <span>ahora</span>
-            </div>
-          </section>
-
-          <section className="tarjeta tarjeta--angosta">
-            <h2>Red {m && <span className="tenue mono">· {m.red.interfaz}</span>}</h2>
-            <div className="red__actual">
-              <div>
-                <span className="red__etiqueta">
-                  <IconoAbajo tam={14} style={{ color: AZUL }} /> Entrante
-                </span>
-                <span className="cifra-media">
-                  {m ? num(m.red.inMbps, m.red.inMbps < 10 ? 2 : 1) : "–"} <small>Mbps</small>
-                </span>
-              </div>
-              <div>
-                <span className="red__etiqueta">
-                  <IconoArriba tam={14} style={{ color: AMBAR }} /> Saliente
-                </span>
-                <span className="cifra-media">
-                  {m ? num(m.red.outMbps, m.red.outMbps < 10 ? 2 : 1) : "–"} <small>Mbps</small>
-                </span>
-              </div>
-            </div>
-            <Grafica
-              etiqueta="Tráfico entrante y saliente"
-              alto={96}
-              tiempos={puntos.map((p) => p.ts)}
-              series={[
-                { nombre: "Entrante", valores: puntos.map((p) => p.redIn), color: AZUL, formato: (v) => `${num(v, 2)} Mbps` },
-                { nombre: "Saliente", valores: puntos.map((p) => p.redOut), color: AMBAR, discontinua: true, formato: (v) => `${num(v, 2)} Mbps` },
-              ]}
-            />
-            {m && (
-              <div className="banda">
-                <div className="banda__fila">
-                  <span>Ancho de banda del ciclo</span>
-                  <span className="mono tenue">
-                    {bytes(m.red.mesB)} / {bytes(m.red.limiteB, 0)}
-                  </span>
-                </div>
-                <Barra valor={m.red.pct} />
-                <div className="banda__fila mono tenue chico">
-                  <span>hoy ↓ {bytes(m.red.hoyRxB)}</span>
-                  <span>hoy ↑ {bytes(m.red.hoyTxB)}</span>
-                  <span>se reinicia en {m.red.diasParaCorte} d</span>
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-
-        <div id="catalogo" className="seccion-titulo">
-          <h2>Catálogo Fersautos · usuarios en vivo</h2>
-          <button type="button" className="boton boton--icono-texto" onClick={abrirVentanaEnVivo}>
-            <IconoVentana tam={16} /> Abrir en ventana aparte
+      <main className="contenido">
+        {tv && (
+          <button type="button" className="boton salir-tv" onClick={salirTv}>
+            Salir de modo TV (Esc)
           </button>
-        </div>
-
-        {estado && <Catalogo p={estado.presencia} ahora={ahora} />}
-
-        <div className="fila">
-          <section className="tarjeta tarjeta--angosta">
-            <h2>Actividad reciente</h2>
-            {estado && <Actividad eventos={estado.eventos} ahora={ahora} />}
-          </section>
-          {estado && <Servicios resumen={estado.servicios} />}
-        </div>
-
-        <Alertas />
+        )}
+        {contenido}
       </main>
+
+      {paleta && <Paleta proyectos={proyectos} alCerrar={() => setPaleta(false)} />}
     </div>
   );
 }
 
-// ---------- Piezas ----------
+// ---------- Menú lateral ----------
 
-/** Abre /en-vivo en una ventana propia (si ya está abierta, la reutiliza en vez de abrir otra). */
-function abrirVentanaEnVivo() {
-  const w = window.open("/en-vivo", "fersautos-en-vivo", "popup,width=980,height=820");
-  w?.focus();
+function lineaProyecto(p: Proyecto, g: DatosGeneral | null) {
+  if (p.id === "fersautos" && g) return { texto: `${g.fersautos.visitasHoy} visitas hoy`, aviso: false };
+  if (p.id === "anm" && g?.anm.datos) {
+    const urgentes = g.anm.datos.vencimientos.filter((v) => v.dias_habiles !== null && v.dias_habiles >= 0 && v.dias_habiles <= 1).length;
+    return urgentes ? { texto: `${urgentes} vence${urgentes === 1 ? "" : "n"} ya`, aviso: true } : { texto: `${g.anm.datos.notificaciones.nuevas_hoy} nuevas hoy`, aviso: false };
+  }
+  return { texto: `${p.contenedores.bien}/${p.contenedores.total} arriba`, aviso: p.contenedores.bien < p.contenedores.total };
 }
 
 /**
- * Menú lateral con "scroll spy": mientras bajas por la página, una pastilla se desliza hasta
- * la sección que estás viendo y el riel de la izquierda se va llenando con tu progreso.
+ * La pastilla se desliza hasta la sección activa y el riel de la izquierda
+ * se llena a medida que bajas por la página.
  */
-function MenuSecciones() {
-  const [activa, setActiva] = useState(0);
+function Menu({ activa, proyectos, general }: { activa: string; proyectos: Proyecto[]; general: DatosGeneral | null }) {
   const nav = useRef<HTMLElement>(null);
-  const enlaces = useRef<(HTMLAnchorElement | null)[]>([]);
+  const enlaces = useRef(new Map<string, HTMLAnchorElement>());
+  const nuevosErrores = (general?.errores ?? []).filter((e) => e.nuevo && e.nivel === "error").length;
 
-  // ¿Qué sección está en la parte alta de la pantalla?
+  useEffect(() => {
+    const el = enlaces.current.get(activa);
+    if (el) {
+      nav.current?.style.setProperty("--y", `${el.offsetTop}px`);
+      nav.current?.style.setProperty("--alto", `${el.offsetHeight}px`);
+    }
+  }, [activa, proyectos.length]);
+
   useEffect(() => {
     let cuadro = 0;
     const calcular = () => {
       cuadro = 0;
-      const doc = document.documentElement;
-      const max = doc.scrollHeight - innerHeight;
-      const progreso = max > 0 ? Math.min(1, scrollY / max) : 0;
-      nav.current?.style.setProperty("--progreso", String(progreso));
-
-      // Al llegar al fondo, la última sección (puede ser muy corta para subir hasta arriba)
-      if (progreso > 0.995) return setActiva(SECCIONES.length - 1);
-      const linea = innerHeight * 0.35;
-      let actual = 0;
-      SECCIONES.forEach((sec, i) => {
-        const el = document.getElementById(sec.id);
-        if (el && (i === 0 || el.getBoundingClientRect().top <= linea)) actual = i;
-      });
-      setActiva(actual);
+      const max = document.documentElement.scrollHeight - innerHeight;
+      nav.current?.style.setProperty("--progreso", String(max > 0 ? Math.min(1, scrollY / max) : 0));
     };
     const alDesplazar = () => {
       cuadro ||= requestAnimationFrame(calcular);
     };
     calcular();
     addEventListener("scroll", alDesplazar, { passive: true });
-    addEventListener("resize", alDesplazar);
     return () => {
       removeEventListener("scroll", alDesplazar);
-      removeEventListener("resize", alDesplazar);
       cancelAnimationFrame(cuadro);
     };
   }, []);
 
-  // Mueve la pastilla al enlace activo
-  useEffect(() => {
-    const el = enlaces.current[activa];
-    if (el) nav.current?.style.setProperty("--y", `${el.offsetTop}px`);
-  }, [activa]);
+  const ref = (clave: string) => (el: HTMLAnchorElement | null) => {
+    if (el) enlaces.current.set(clave, el);
+  };
 
   return (
     <nav aria-label="Secciones" className="lateral__nav" ref={nav}>
       <span className="lateral__riel" aria-hidden="true" />
       <span className="lateral__indicador" aria-hidden="true" />
-      {SECCIONES.map(({ id, texto, Icono }, i) => (
-        <a
-          key={id}
-          ref={(el) => {
-            enlaces.current[i] = el;
-          }}
-          className="nav"
-          href={`#${id}`}
-          aria-current={activa === i ? "true" : undefined}
-        >
+      <span className="lateral__grupo">General</span>
+      {GENERALES.map(({ ruta, texto, Icono }) => (
+        <a key={ruta} ref={ref(ruta)} className="nav" href={enlace(ruta)} aria-current={activa === ruta ? "page" : undefined}>
           <Icono /> {texto}
+          {ruta === "logs" && nuevosErrores > 0 && (
+            <span className="nav__insignia" title="Errores nuevos en las últimas 24 h" aria-label={`${nuevosErrores} errores nuevos`}>
+              {nuevosErrores}
+            </span>
+          )}
         </a>
       ))}
+      <span className="lateral__grupo">Proyectos</span>
+      {proyectos.map((p) => {
+        const l = lineaProyecto(p, general);
+        const caido = p.contenedores.total > 0 && p.contenedores.bien < p.contenedores.total;
+        const clave = `proyecto/${p.id}`;
+        return (
+          <a key={p.id} ref={ref(clave)} className="nav nav--proyecto" href={enlace(clave)} aria-current={activa === clave ? "page" : undefined}>
+            <span className={caido ? "punto punto--caido" : l.aviso ? "punto punto--ambar" : "punto punto--vivo-fijo"} />
+            <span className="nav__nombre">{p.nombre}</span>
+            <span className={l.aviso ? "nav__dato texto-ambar" : "nav__dato"}>{l.texto}</span>
+          </a>
+        );
+      })}
     </nav>
   );
 }
 
-function Barra({ valor }: { valor: number }) {
-  const v = Math.max(0, Math.min(100, valor));
-  return (
-    <div className="barra" role="presentation">
-      <div className={v >= 80 ? "barra__relleno barra__relleno--alta" : "barra__relleno"} style={{ width: `${Math.max(v, 0.5)}%` }} />
-    </div>
-  );
-}
+// ---------- Paleta Ctrl+K ----------
 
-function Kpis({ m }: { m: Instantanea }) {
-  const tarjetas = [
-    {
-      titulo: "CPU",
-      valor: num(m.cpu.pct),
-      unidad: "%",
-      porcentaje: m.cpu.pct,
-      nota: `${m.cpu.nucleos} vCPU · carga ${num(m.cpu.carga[0], 2)} / ${num(m.cpu.carga[1], 2)} / ${num(m.cpu.carga[2], 2)}`,
-    },
-    {
-      titulo: "RAM",
-      valor: gib(m.ram.usadaB),
-      unidad: `/ ${gib(m.ram.totalB, 0)} GB`,
-      porcentaje: m.ram.pct,
-      nota: `libre ${gib(m.ram.totalB - m.ram.usadaB)} GB · caché ${gib(m.ram.cacheB)} GB`,
-    },
-    {
-      titulo: "Memoria auxiliar (swap)",
-      valor: m.swap.totalB ? num(m.swap.usadaB / 1024 ** 2) : "–",
-      unidad: m.swap.totalB ? `MB / ${gib(m.swap.totalB, 0)} GB` : "sin swap",
-      porcentaje: m.swap.pct,
-      nota: !m.swap.totalB ? "No hay swap configurada" : m.swap.pct > 50 ? "Hay presión de memoria" : "Sin presión de memoria",
-    },
-    {
-      titulo: "Disco",
-      valor: num(m.disco.usadoB / 1e9),
-      unidad: `/ ${num(m.disco.totalB / 1e9)} GB`,
-      porcentaje: m.disco.pct,
-      nota: `lectura ${bytes(m.disco.lecturaBs)}/s · escritura ${bytes(m.disco.escrituraBs)}/s`,
-    },
+function Paleta({ proyectos, alCerrar }: { proyectos: Proyecto[]; alCerrar: () => void }) {
+  const [q, setQ] = useState("");
+  const [i, setI] = useState(0);
+  const opciones = [
+    ...GENERALES.map((g) => ({ texto: g.texto, destino: enlace(g.ruta) })),
+    ...proyectos.map((p) => ({ texto: p.nombre, destino: enlace(`proyecto/${p.id}`) })),
+    ...proyectos.map((p) => ({ texto: `Logs de ${p.nombre}`, destino: enlace("logs", { proyecto: p.id }) })),
+    { texto: "Logs: solo errores", destino: enlace("logs", { nivel: "error" }) },
+    { texto: "Fersautos en ventana aparte", destino: "ventana" },
   ];
+  const filtradas = opciones.filter((o) => o.texto.toLowerCase().includes(q.toLowerCase()));
+  const ir = (destino: string) => {
+    if (destino === "ventana") window.open("/en-vivo", "fersautos-en-vivo", "popup,width=980,height=820")?.focus();
+    else navegar(destino);
+    alCerrar();
+  };
   return (
-    <div className="kpis">
-      {tarjetas.map((t) => (
-        <div className="tarjeta kpi" key={t.titulo}>
-          <div className="kpi__cabeza">
-            <span>{t.titulo}</span>
-            <span className="mono">{pct(t.porcentaje)}</span>
-          </div>
-          <div className="kpi__valor">
-            <span className="cifra-grande">{t.valor}</span>
-            <span className="tenue">{t.unidad}</span>
-          </div>
-          <Barra valor={t.porcentaje} />
-          <div className="tenue chico">{t.nota}</div>
-        </div>
-      ))}
+    <div className="paleta__fondo" onClick={alCerrar}>
+      <div className="paleta" role="dialog" aria-label="Saltar a una sección" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          type="search"
+          placeholder="Escribe una sección, proyecto o “logs”…"
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setI(0);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") (e.preventDefault(), setI((n) => Math.min(n + 1, filtradas.length - 1)));
+            if (e.key === "ArrowUp") (e.preventDefault(), setI((n) => Math.max(n - 1, 0)));
+            if (e.key === "Enter" && filtradas[i]) ir(filtradas[i]!.destino);
+            if (e.key === "Escape") alCerrar();
+          }}
+        />
+        <ul>
+          {filtradas.map((o, n) => (
+            <li key={o.texto}>
+              <button type="button" className={n === i ? "paleta__opcion paleta__opcion--activa" : "paleta__opcion"} onClick={() => ir(o.destino)}>
+                {o.texto}
+              </button>
+            </li>
+          ))}
+          {filtradas.length === 0 && <li className="tenue chico paleta__vacio">Nada coincide.</li>}
+        </ul>
+      </div>
     </div>
   );
 }

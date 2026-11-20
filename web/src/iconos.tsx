@@ -145,3 +145,27 @@ export const IconoVentana = (p: P) => (
     <line x1="10" y1="14" x2="21" y2="3" />
   </Base>
 );
+export const IconoTerminal = (p: P) => (
+  <Base {...p}>
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" y1="19" x2="20" y2="19" />
+  </Base>
+);
+export const IconoBuscar = (p: P) => (
+  <Base {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </Base>
+);
+export const IconoCpu = (p: P) => (
+  <Base {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <rect x="9" y="9" width="6" height="6" />
+    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+  </Base>
+);
+export const IconoPantalla = (p: P) => (
+  <Base {...p}>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+  </Base>
+);

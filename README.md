@@ -4,6 +4,9 @@ Panel privado para vigilar el VPS (Hostinger KVM 2) y los proyectos que corren e
 
 - **Servidor en vivo**: CPU, RAM, memoria auxiliar (swap), disco, tráfico entrante/saliente y ancho de banda del ciclo.
 - **Catálogo Fersautos en vivo**: si Natalia está conectada, cuántos visitantes ven el catálogo y cuántos están llenando el formulario de crédito.
+- **Logs en vivo**: consola con las líneas de todos los contenedores a la vez, filtros por proyecto y nivel, búsqueda, pausa y errores agrupados (avisa por Telegram cuando aparece un error que nunca se había visto).
+- **Notificaciones ANM**: barridos (duración frente a lo normal), vencimientos de las próximas semanas y botón para barrer.
+- **Vista general**: resumen "desde tu última visita", comparaciones con lo normal, disponibilidad de cada sitio, origen de las visitas, modelos más vistos y línea de tiempo con despliegues detectados solos.
 - **Servicios**: estado de cada contenedor Docker, consumo, logs y reinicio (con confirmación).
 - **Alertas**: CPU/RAM sostenidas, disco lleno, servicio caído, Natalia conectada, formulario enviado (en el panel y por **Telegram**).
 - **Login** de un solo administrador: contraseña con hash scrypt, cookie httpOnly, bloqueo por intentos fallidos.
@@ -37,6 +40,10 @@ server/
   presencia.ts   usuarios en vivo del catálogo
   docker.ts      contenedores, estadísticas, logs, reinicio
   alertas.ts     umbrales sostenidos, avisos y /silencio
+  logs.ts        consola de logs en vivo y errores agrupados
+  chequeos.ts    disponibilidad y tiempo de respuesta de cada sitio
+  anm.ts         lectura de Notificaciones ANM (/api/monitor)
+  estadisticas.ts  comparaciones con lo normal, visitas y línea de tiempo
   telegram.ts    comandos del bot (/estado, /usuarios, /reiniciar...)
   telegram-api.ts  llamadas a la API de Telegram
   eventos.ts     "Actividad reciente"
@@ -151,6 +158,14 @@ El bot solo le escribe a ese chat; si otra persona le habla al bot, no pasa nada
 
 Funciona con *long polling*: el monitor le pregunta a Telegram por mensajes nuevos, así que no necesita dominio.
 Al arrancar descarta los comandos que llegaron mientras estaba apagado.
+
+### 6. Conectar Notificaciones ANM
+
+1. Genera un token: `openssl rand -hex 32`.
+2. En el `.env` de ANM agrega `MONITOR_TOKEN=<token>` y redespliega ANM.
+3. En `/opt/apps/metricas/.env.production` agrega `ANM_TOKEN=<el mismo token>` y `docker compose -f compose.prod.yml up -d`.
+
+La ruta `/api/monitor/*` de ANM solo se usa por la red interna; su Caddy la bloquea desde internet.
 
 ### Actualizar el monitor
 

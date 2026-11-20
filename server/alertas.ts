@@ -17,6 +17,7 @@ export type AjustesAlertas = {
   servicio: { activa: boolean };
   natalia: { activa: boolean };
   formulario: { activa: boolean };
+  errores: { activa: boolean };
 };
 
 const POR_DEFECTO: AjustesAlertas = {
@@ -26,6 +27,7 @@ const POR_DEFECTO: AjustesAlertas = {
   servicio: { activa: true },
   natalia: { activa: false },
   formulario: { activa: true },
+  errores: { activa: true },
 };
 
 let ajustes = leerAjuste<AjustesAlertas>("alertas", POR_DEFECTO);
@@ -46,6 +48,7 @@ export function guardarAlertas(x: unknown) {
     servicio: { activa: bool(o.servicio?.activa, a.servicio.activa) },
     natalia: { activa: bool(o.natalia?.activa, a.natalia.activa) },
     formulario: { activa: bool(o.formulario?.activa, a.formulario.activa) },
+    errores: { activa: bool(o.errores?.activa, a.errores.activa) },
   };
   guardarAjuste("alertas", ajustes);
   return leerAjustesPublicos();
@@ -163,6 +166,11 @@ export function iniciarAlertas() {
     if (ajustes.natalia.activa && e.tipo === "natalia_conectada") avisar(`🟢 ${e.texto}`);
     if (ajustes.natalia.activa && e.tipo === "natalia_desconectada") avisar(`⚪ ${e.texto}`);
     if (ajustes.formulario.activa && e.tipo === "formulario_enviado") avisar(`📝 ${e.texto}`);
+    if (ajustes.errores.activa && e.tipo === "error_nuevo") avisar(`🆕 ${e.texto}`);
+    // Un sitio que deja de responder (chequeo de disponibilidad) cuenta como servicio caído
+    if (ajustes.servicio.activa && e.proyecto && /no responde|volvió a responder/.test(e.texto)) {
+      avisar(`${e.tipo === "alerta" ? "🔴" : "✅"} ${e.texto}`);
+    }
   });
   const t = setInterval(revisarServicios, 10_000);
   if (!telegramListo()) console.warn("[alertas] Telegram sin configurar: las alertas solo se verán en el panel");

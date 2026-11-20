@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./api.ts";
-import type { EstadoCompleto, Evento, Instantanea, Muestra, Presencia, Rango, ResumenServicios } from "./tipos.ts";
+import type { EstadoCompleto, Evento, General, Instantanea, Muestra, Presencia, Rango, ResumenServicios } from "./tipos.ts";
 
 /**
  * Conexión en vivo con el servidor (Server-Sent Events).
@@ -9,8 +9,10 @@ import type { EstadoCompleto, Evento, Instantanea, Muestra, Presencia, Rango, Re
  */
 export function useVivo() {
   const [estado, setEstado] = useState<EstadoCompleto | null>(null);
+  const [general, setGeneral] = useState<General | null>(null);
   const [conectado, setConectado] = useState(false);
   const oyentesMuestra = useRef(new Set<(m: Instantanea) => void>());
+  const oyentesEvento = useRef(new Set<(e: Evento) => void>());
 
   useEffect(() => {
     const es = new EventSource("/api/vivo");
@@ -38,7 +40,9 @@ export function useVivo() {
     es.addEventListener("evento", (e) => {
       const ev = leer<Evento>(e);
       setEstado((s) => (s ? { ...s, eventos: [ev, ...s.eventos].slice(0, 15) } : s));
+      for (const fn of oyentesEvento.current) fn(ev);
     });
+    es.addEventListener("general", (e) => setGeneral(leer<General>(e)));
     es.addEventListener("sesion", () => {
       es.close();
       api("/sesion").catch(() => {});
@@ -47,7 +51,7 @@ export function useVivo() {
     return () => es.close();
   }, []);
 
-  return { estado, conectado, oyentesMuestra: oyentesMuestra.current };
+  return { estado, general, conectado, oyentesMuestra: oyentesMuestra.current, oyentesEvento: oyentesEvento.current };
 }
 
 const PUNTOS_15M = 300;

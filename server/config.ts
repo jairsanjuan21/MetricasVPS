@@ -42,6 +42,13 @@ export const config = {
   /** docker-socket-proxy. Vacío = la sección de servicios se desactiva. */
   dockerUrl: process.env.DOCKER_URL ?? "",
 
+  // --- Proyectos (red interna de Docker "proxy") ---
+  /** Dirección interna del catálogo para medir si responde y cuánto tarda. Vacío = sin chequeo. */
+  fersautosUrl: process.env.FERSAUTOS_URL ?? "http://fersautos-app:3000/",
+  /** Notificaciones ANM: dirección interna y el token de /api/monitor (MONITOR_TOKEN en ANM). */
+  anmUrl: (process.env.ANM_URL ?? "http://notificaciones-anm:8000").replace(/\/$/, ""),
+  anmToken: process.env.ANM_TOKEN ?? "",
+
   // --- Plan del VPS (para porcentajes y barras) ---
   bandaLimiteGb: numero("BANDA_LIMITE_GB", 8000),
   bandaDiaCorte: numero("BANDA_DIA_CORTE", 1),

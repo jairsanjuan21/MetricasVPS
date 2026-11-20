@@ -110,7 +110,10 @@ export const COLOR_EVENTO: Record<Evento["tipo"], string> = {
   formulario_enviado: "punto--lila",
   alerta: "punto--ambar",
   alerta_resuelta: "punto--apagado",
-  servicio: "punto--vivo-fijo",
+  servicio: "punto--anillo",
+  despliegue: "punto--anillo",
+  anm_barrido: "punto--gris",
+  error_nuevo: "punto--rojo",
 };
 
 export function Actividad({ eventos, ahora }: { eventos: Evento[]; ahora: number }) {

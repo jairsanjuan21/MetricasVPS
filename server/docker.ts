@@ -20,6 +20,13 @@ export type Servicio = {
   cpuPct: number | null;
   memoriaB: number | null;
   memoriaLimiteB: number | null;
+  /** Nombre real del contenedor (p. ej. notificaciones-anm) */
+  contenedor: string;
+  /** Proyecto del panel al que pertenece (fersautos, anm, o el de Docker Compose) */
+  grupo: string;
+  idCompleto: string;
+  /** Cuándo se creó el contenedor (ms): cambia en cada despliegue */
+  creado: number;
 };
 
 type ContenedorApi = {
@@ -29,7 +36,23 @@ type ContenedorApi = {
   State: string;
   Status: string;
   Labels: Record<string, string>;
+  Created: number;
+  ImageID: string;
 };
+
+/**
+ * A qué proyecto del panel pertenece cada contenedor. Los conocidos tienen nombre propio;
+ * cualquier otro proyecto de Docker Compose aparece solo con su nombre (así el "proyecto 3"
+ * se detecta sin tocar código).
+ */
+export function grupoDe(c: { proyecto: string; contenedor: string }) {
+  if (c.proyecto === "fersautos" || c.contenedor.startsWith("fersautos")) return "fersautos";
+  if (c.contenedor === "notificaciones-anm" || /anm|notificaciones/i.test(c.proyecto)) return "anm";
+  return c.proyecto || c.contenedor;
+}
+
+/** Proyectos de infraestructura: no salen como "proyecto" en el menú */
+export const INFRA = new Set(["metricas", "proxy"]);
 
 const activo = () => !!config.dockerUrl;
 
@@ -85,7 +108,12 @@ async function refrescar() {
           cpuPct: null,
           memoriaB: null,
           memoriaLimiteB: null,
+          contenedor: c.Names[0]?.replace(/^\//, "") ?? c.Id.slice(0, 12),
+          grupo: "",
+          idCompleto: c.Id,
+          creado: c.Created * 1000,
         };
+        base.grupo = grupoDe(base);
         if (c.State !== "running") return base;
         try {
           return { ...base, ...(await estadisticas(c.Id)) };
@@ -94,12 +122,52 @@ async function refrescar() {
         }
       }),
     );
-    cache.sort((a, b) => a.proyecto.localeCompare(b.proyecto) || a.nombre.localeCompare(b.nombre));
+    cache.sort((a, b) => a.grupo.localeCompare(b.grupo) || a.nombre.localeCompare(b.nombre));
+    detectarDespliegues(lista);
     error = null;
+    for (const fn of oyentes) fn(cache);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
 }
+
+// ---------- Despliegues ----------
+// Si el contenedor de un mismo servicio cambia de id, se recreó: casi siempre es un despliegue
+// (docker compose up -d --build). Se anota solo en la línea de tiempo.
+const contenedorPorServicio = new Map<string, { id: string; imagen: string }>();
+let primeraVuelta = true;
+
+function detectarDespliegues(lista: ContenedorApi[]) {
+  for (const c of lista) {
+    const servicio = c.Labels["com.docker.compose.service"];
+    const proyecto = c.Labels["com.docker.compose.project"] ?? "";
+    if (!servicio || c.State !== "running") continue;
+    const clave = `${proyecto}/${servicio}`;
+    const antes = contenedorPorServicio.get(clave);
+    contenedorPorServicio.set(clave, { id: c.Id, imagen: c.ImageID });
+    if (primeraVuelta || !antes || antes.id === c.Id) continue;
+    const nombre = c.Names[0]?.replace(/^\//, "") ?? "";
+    const imagenNueva = antes.imagen !== c.ImageID;
+    publicar(
+      imagenNueva ? "despliegue" : "servicio",
+      imagenNueva
+        ? `Despliegue · ${clave} con imagen nueva (${c.ImageID.replace("sha256:", "").slice(0, 7)})`
+        : `${clave} se recreó con la misma imagen`,
+      { proyecto: grupoDe({ proyecto, contenedor: nombre }), logs: nombre },
+    );
+  }
+  primeraVuelta = false;
+}
+
+const oyentes = new Set<(s: Servicio[]) => void>();
+export function alRefrescarDocker(fn: (s: Servicio[]) => void) {
+  oyentes.add(fn);
+  return () => oyentes.delete(fn);
+}
+
+/** Para que otros módulos (logs) hablen con Docker por el mismo proxy */
+export const urlDocker = (ruta: string) => config.dockerUrl.replace(/\/$/, "") + ruta;
+export const dockerActivo = activo;
 
 export function iniciarDocker() {
   if (!activo()) {
@@ -120,7 +188,10 @@ export async function reiniciar(id: string) {
   const s = buscar(id);
   if (!s) throw new Error("Contenedor no encontrado.");
   await api(`/containers/${s.id}/restart?t=10`, { method: "POST" });
-  publicar("servicio", `Se reinició ${s.proyecto ? s.proyecto + "/" : ""}${s.nombre}`);
+  publicar("servicio", `Se reinició ${s.proyecto ? s.proyecto + "/" : ""}${s.nombre} desde el panel`, {
+    proyecto: s.grupo,
+    logs: s.contenedor,
+  });
   setTimeout(refrescar, 1500);
   return s;
 }

@@ -24,6 +24,7 @@ export type Latido = {
   nombre?: string;
   dispositivo: string;
   escribiendo?: boolean;
+  origen?: string;
 };
 
 type Sesion = {
@@ -52,6 +53,36 @@ const avisar = () => {
   for (const fn of oyentes) fn();
 };
 
+// ---------- Visitas del día (para el embudo, el origen y los modelos más vistos) ----------
+// Se guarda el alias (V-7F2A), no el id real de la pestaña.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS visitas (
+    dia     TEXT NOT NULL,
+    alias   TEXT NOT NULL,
+    ts      INTEGER NOT NULL,      -- primera vez que se le vio ese día
+    origen  TEXT NOT NULL DEFAULT 'directo',
+    PRIMARY KEY (dia, alias)
+  );
+  CREATE TABLE IF NOT EXISTS vistas_modelo (
+    dia     TEXT NOT NULL,
+    modelo  TEXT NOT NULL,
+    alias   TEXT NOT NULL,
+    PRIMARY KEY (dia, modelo, alias)
+  );
+`);
+const anotarVisita = db.prepare("INSERT OR IGNORE INTO visitas (dia, alias, ts, origen) VALUES (?, ?, ?, ?)");
+const anotarModelo = db.prepare("INSERT OR IGNORE INTO vistas_modelo (dia, modelo, alias) VALUES (?, ?, ?)");
+const origenDe = db.prepare("SELECT origen FROM visitas WHERE alias = ? ORDER BY ts DESC LIMIT 1");
+
+const ORIGENES: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  estados: "Estados de WhatsApp",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  qr: "código QR",
+};
+
 // ---------- Validación de lo que llega ----------
 
 const ROLES: Rol[] = ["visitante", "asesora", "admin"];
@@ -72,6 +103,7 @@ export function validarLatido(x: unknown): Latido | null {
     nombre: typeof o.nombre === "string" ? o.nombre.slice(0, 60) : undefined,
     dispositivo: typeof o.dispositivo === "string" ? o.dispositivo.slice(0, 60) : "Desconocido",
     escribiendo: o.escribiendo === true,
+    origen: typeof o.origen === "string" && /^[a-z]{2,20}$/.test(o.origen) ? o.origen : undefined,
   };
 }
 
@@ -104,7 +136,13 @@ export function registrarLatido(l: Latido) {
     db.prepare(
       "INSERT INTO catalogo_dia (dia, enviados) VALUES (?, 1) ON CONFLICT(dia) DO UPDATE SET enviados = enviados + 1",
     ).run(diaLocal());
-    publicar("formulario_enviado", `Formulario de crédito enviado por ${aliasDe(l.sid)}`);
+    const alias = aliasDe(l.sid);
+    const origen = (origenDe.get(alias) as { origen: string } | undefined)?.origen;
+    publicar(
+      "formulario_enviado",
+      `Formulario de crédito enviado por ${alias}${origen && ORIGENES[origen] ? ` · llegó por ${ORIGENES[origen]}` : ""}`,
+      { proyecto: "fersautos" },
+    );
     yaAbrieronFormulario.delete(l.sid);
   } else if (l.tipo === "salida") {
     sesiones.delete(l.sid);
@@ -125,7 +163,13 @@ export function registrarLatido(l: Latido) {
     });
     if (l.rol === "visitante" && actividad === "formulario" && !yaAbrieronFormulario.has(l.sid)) {
       yaAbrieronFormulario.add(l.sid);
-      publicar("formulario_abierto", `${aliasDe(l.sid)} abrió el formulario de crédito`);
+      publicar("formulario_abierto", `${aliasDe(l.sid)} abrió el formulario de crédito`, { proyecto: "fersautos" });
+    }
+    if (l.rol === "visitante") {
+      const alias = aliasDe(l.sid);
+      anotarVisita.run(diaLocal(), alias, ahora, l.origen ?? "directo");
+      const modelo = /^\/modelo\/([a-z0-9-]{1,60})/.exec(l.ruta)?.[1];
+      if (modelo) anotarModelo.run(diaLocal(), modelo, alias);
     }
     actualizarPico();
   }
@@ -137,11 +181,11 @@ export function registrarLatido(l: Latido) {
 function revisarNatalia(antes: boolean) {
   const ahora = nataliaEnLinea();
   if (antes === ahora) return;
-  if (ahora) publicar("natalia_conectada", "Natalia se conectó");
+  if (ahora) publicar("natalia_conectada", "Natalia se conectó", { proyecto: "fersautos" });
   else {
     natalia = { ultimaVez: Date.now() };
     guardarAjuste("natalia", natalia);
-    publicar("natalia_desconectada", "Natalia se desconectó");
+    publicar("natalia_desconectada", "Natalia se desconectó", { proyecto: "fersautos" });
   }
 }
 

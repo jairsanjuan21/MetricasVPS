@@ -15,6 +15,11 @@ import { iniciarDocker, logs, reiniciar, resumenServicios } from "./docker.ts";
 import { avisar, guardarAlertas, iniciarAlertas, leerAlertas } from "./alertas.ts";
 import { alPublicar, eventosRecientes } from "./eventos.ts";
 import { iniciarBot } from "./telegram.ts";
+import { alLineaNueva, erroresAgrupados, iniciarLogs, lineasAlrededor, lineasRecientes, type LineaLog } from "./logs.ts";
+import { iniciarChequeos, resumenChequeos } from "./chequeos.ts";
+import { barrerAnm, iniciarAnm, resumenAnm } from "./anm.ts";
+import { lineaDeTiempo, marcarActividad, resumenGeneral } from "./estadisticas.ts";
+import { INFRA } from "./docker.ts";
 
 const app = new Hono();
 
@@ -71,6 +76,78 @@ const estadoCompleto = () => ({
 
 privada.get("/estado", (c) => c.json(estadoCompleto()));
 
+/** Proyectos que aparecen en el menú: los conocidos + cualquier otro de Docker Compose (se detectan solos). */
+function proyectos() {
+  const conocidos = [
+    { id: "fersautos", nombre: "Fersautos" },
+    { id: "anm", nombre: "Notificaciones ANM" },
+  ];
+  const grupos = new Map<string, { total: number; bien: number }>();
+  for (const s of resumenServicios().servicios) {
+    const g = grupos.get(s.grupo) ?? { total: 0, bien: 0 };
+    g.total++;
+    if (s.estado === "running" && s.salud !== "enferma") g.bien++;
+    grupos.set(s.grupo, g);
+  }
+  const otros = [...grupos.keys()]
+    .filter((g) => !INFRA.has(g) && !conocidos.some((k) => k.id === g))
+    .map((g) => ({ id: g, nombre: g }));
+  return [...conocidos, ...otros].map((p) => ({ ...p, contenedores: grupos.get(p.id) ?? { total: 0, bien: 0 } }));
+}
+
+/** Todo lo de la vista general que no cambia cada 2 s (se recalcula cada 15 s) */
+const general = () => ({
+  ...resumenGeneral(),
+  chequeos: resumenChequeos(),
+  anm: resumenAnm(),
+  proyectos: proyectos(),
+  errores: erroresAgrupados(24).slice(0, 8),
+});
+
+privada.get("/general", (c) => c.json(general()));
+privada.get("/linea", (c) => c.json(lineaDeTiempo()));
+privada.get("/logs/errores", (c) => c.json(erroresAgrupados(Math.min(Number(c.req.query("horas")) || 24, 24 * 30))));
+privada.get("/logs/contexto", (c) =>
+  c.json(lineasAlrededor(Number(c.req.query("ts")) || Date.now(), c.req.query("fuente") || undefined)),
+);
+
+/**
+ * Consola de logs en vivo: manda las últimas líneas y luego cada línea nueva de cualquier contenedor.
+ * Las líneas se agrupan cada 250 ms para no mandar un mensaje por línea cuando hay ráfagas.
+ */
+privada.get("/logs/vivo", (c) => {
+  return streamSSE(c, async (stream) => {
+    const enviar = (event: string, data: unknown) => {
+      if (!stream.aborted) stream.writeSSE({ event, data: JSON.stringify(data) }).catch(() => {});
+    };
+    enviar("inicio", lineasRecientes(1000));
+    let lote: LineaLog[] = [];
+    let t: NodeJS.Timeout | null = null;
+    const quitar = alLineaNueva((l) => {
+      lote.push(l);
+      t ??= setTimeout(() => {
+        t = null;
+        enviar("lineas", lote);
+        lote = [];
+      }, 250);
+    });
+    // Comentario cada 25 s para que ningún proxy cierre la conexión por inactividad
+    const latido = setInterval(() => !stream.aborted && stream.write(": latido\n\n").catch(() => {}), 25_000);
+    await new Promise<void>((resolve) => stream.onAbort(resolve));
+    quitar();
+    clearInterval(latido);
+    if (t) clearTimeout(t);
+  });
+});
+
+privada.post("/anm/barrer", async (c) => {
+  try {
+    return c.json(await barrerAnm());
+  } catch (e) {
+    return c.json({ mensaje: e instanceof Error ? e.message : "No se pudo iniciar el barrido." }, 400);
+  }
+});
+
 privada.get("/historial", (c) => {
   const rango = c.req.query("rango") as Rango;
   if (!["15m", "1h", "24h"].includes(rango)) return c.json({ mensaje: "Rango inválido." }, 400);
@@ -89,6 +166,8 @@ privada.get("/vivo", (c) => {
     };
 
     enviar("estado", estadoCompleto());
+    enviar("general", general());
+    marcarActividad(true);
 
     let vueltas = 0;
     const quitarMuestra = alNuevaMuestra((m) => {
@@ -99,7 +178,10 @@ privada.get("/vivo", (c) => {
         return;
       }
       enviar("metricas", m);
-      if (++vueltas % 5 === 0) enviar("servicios", resumenServicios());
+      vueltas++;
+      if (vueltas % 5 === 0) enviar("servicios", resumenServicios());
+      if (vueltas % 8 === 0) enviar("general", general());
+      if (vueltas % 30 === 0) marcarActividad();
     });
 
     // Los cambios de presencia llegan en ráfagas (varias pestañas latiendo): se agrupan en 300 ms
@@ -116,6 +198,7 @@ privada.get("/vivo", (c) => {
     quitarMuestra();
     quitarPresencia();
     quitarEventos();
+    marcarActividad();
     if (pendiente) clearTimeout(pendiente);
   });
 });
@@ -160,7 +243,7 @@ if (existsSync(WEB)) {
 
 // ---------- Arranque ----------
 
-const paradas = [iniciarRecolector(), iniciarLimpiezaPresencia(), iniciarDocker(), iniciarAlertas(), iniciarBot()];
+const paradas = [iniciarRecolector(), iniciarLimpiezaPresencia(), iniciarDocker(), iniciarAlertas(), iniciarBot(), iniciarLogs(), iniciarChequeos(), iniciarAnm()];
 
 const servidor = serve({ fetch: app.fetch, port: config.puerto, hostname: "0.0.0.0" }, (info) =>
   console.log(`[monitor] Escuchando en http://localhost:${info.port} (${config.enProduccion ? "producción" : "desarrollo"})`),
